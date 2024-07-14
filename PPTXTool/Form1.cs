@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -82,102 +83,152 @@ namespace PPTXTool
 
         void Check(string pptxPath, int slideFrom, int slideZoomTo)
         {
-            try
+            string newPptxPath = CloneFile(pptxPath, "tmp");
+            if (!string.IsNullOrWhiteSpace(newPptxPath))
             {
-                lblStatus.ForeColor = Color.Black;
-                setStatus("Đang kiểm tra");
-                bool isTrueZoom = false;
-                using (PresentationDocument presentationDocument = PresentationDocument.Open(pptxPath, false))
+                try
                 {
-                    PresentationPart presentationPart = presentationDocument.PresentationPart;
-                    Presentation presentation = presentationPart.Presentation;
-                    int totalSlides = presentation.SlideIdList.Count();
-                    if (totalSlides <= 0)
+                    lblStatus.ForeColor = Color.Black;
+                    setStatus("Đang kiểm tra");
+                    bool isTrueZoom = false;
+                    using (PresentationDocument presentationDocument = PresentationDocument.Open(newPptxPath, false))
                     {
-                        setStatus(false, "Không tìm thấy slide nào trong tệp tin");
-                        return;
-                    }
-                    if (slideZoomTo > totalSlides)
-                    {
-                        setStatus(false, string.Format("Vượt quá slide hiện có ({0})", totalSlides));
-                        return;
-                    }
-                    int slideIndex = 1;
-                    uint sldIdZoomTo = 0;
-
-                    if (slideFrom <= slideZoomTo)
-                    {
-                        foreach (SlideId slideId in presentation.SlideIdList)
+                        PresentationPart presentationPart = presentationDocument.PresentationPart;
+                        Presentation presentation = presentationPart.Presentation;
+                        int totalSlides = presentation.SlideIdList.Count();
+                        if (totalSlides <= 0)
                         {
-                            SlidePart slidePart = presentationPart.GetPartById(slideId.RelationshipId) as SlidePart;
-                            Slide slide = slidePart.Slide;
-                            if (slideIndex == slideFrom)
+                            setStatus(false, "Không tìm thấy slide nào trong tệp tin");
+                            return;
+                        }
+                        if (slideZoomTo > totalSlides)
+                        {
+                            setStatus(false, string.Format("Vượt quá slide hiện có ({0})", totalSlides));
+                            return;
+                        }
+                        int slideIndex = 1;
+                        uint sldIdZoomTo = 0;
+
+                        if (slideFrom <= slideZoomTo)
+                        {
+                            foreach (SlideId slideId in presentation.SlideIdList)
                             {
-                                ///Check xem có hiệu ứng zoom không
-                                var sldZmObj = slide.Descendants<OpenXmlUnknownElement>()
-                                    .FirstOrDefault(it => it.LocalName == "sldZmObj");
-                                if (sldZmObj != null)
+                                SlidePart slidePart = presentationPart.GetPartById(slideId.RelationshipId) as SlidePart;
+                                Slide slide = slidePart.Slide;
+                                if (slideIndex == slideFrom)
                                 {
-                                    var sldIdAttr = sldZmObj.GetAttribute("sldId", "");
-                                    if (sldIdAttr != null)
+                                    ///Check xem có hiệu ứng zoom không
+                                    var sldZmObj = slide.Descendants<OpenXmlUnknownElement>()
+                                        .FirstOrDefault(it => it.LocalName == "sldZmObj");
+                                    if (sldZmObj != null)
                                     {
-                                        UInt32.TryParse(sldIdAttr.Value, out sldIdZoomTo);
-                                        slideIndex += 1;
-                                        continue;
+                                        var sldIdAttr = sldZmObj.GetAttribute("sldId", "");
+                                        if (sldIdAttr != null)
+                                        {
+                                            UInt32.TryParse(sldIdAttr.Value, out sldIdZoomTo);
+                                            slideIndex += 1;
+                                            continue;
+                                        }
+                                        break;
                                     }
                                     break;
                                 }
-                                break;
-                            }
-                            if (slideIndex == slideZoomTo && slideId.Id.Value == sldIdZoomTo)
-                            {
-                                isTrueZoom = true;
-                                break;
-                            }
-                            slideIndex += 1;
-                        }
-                    }
-                    else
-                    {
-                        Dictionary<uint, int> sldIndexWithId = new Dictionary<uint, int>();
-                        foreach (SlideId slideId in presentation.SlideIdList)
-                        {
-                            SlidePart slidePart = presentationPart.GetPartById(slideId.RelationshipId) as SlidePart;
-                            Slide slide = slidePart.Slide;
-
-                            UInt32.TryParse(slideId.Id, out uint id);
-                            sldIndexWithId.Add(id, slideIndex);
-
-                            if (slideIndex == slideFrom)
-                            {
-                                ///Check xem có hiệu ứng zoom không
-                                var sldZmObj = slide.Descendants<OpenXmlUnknownElement>()
-                                    .FirstOrDefault(it => it.LocalName == "sldZmObj");
-                                if (sldZmObj != null)
+                                if (slideIndex == slideZoomTo && slideId.Id.Value == sldIdZoomTo)
                                 {
-                                    var sldIdAttr = sldZmObj.GetAttribute("sldId", "");
-                                    if (sldIdAttr != null)
+                                    isTrueZoom = true;
+                                    break;
+                                }
+                                slideIndex += 1;
+                            }
+                        }
+                        else
+                        {
+                            Dictionary<uint, int> sldIndexWithId = new Dictionary<uint, int>();
+                            foreach (SlideId slideId in presentation.SlideIdList)
+                            {
+                                SlidePart slidePart = presentationPart.GetPartById(slideId.RelationshipId) as SlidePart;
+                                Slide slide = slidePart.Slide;
+
+                                UInt32.TryParse(slideId.Id, out uint id);
+                                sldIndexWithId.Add(id, slideIndex);
+
+                                if (slideIndex == slideFrom)
+                                {
+                                    ///Check xem có hiệu ứng zoom không
+                                    var sldZmObj = slide.Descendants<OpenXmlUnknownElement>()
+                                        .FirstOrDefault(it => it.LocalName == "sldZmObj");
+                                    if (sldZmObj != null)
                                     {
-                                        UInt32.TryParse(sldIdAttr.Value, out sldIdZoomTo);
-                                        slideIndex += 1;
-                                        continue;
+                                        var sldIdAttr = sldZmObj.GetAttribute("sldId", "");
+                                        if (sldIdAttr != null)
+                                        {
+                                            UInt32.TryParse(sldIdAttr.Value, out sldIdZoomTo);
+                                            slideIndex += 1;
+                                            continue;
+                                        }
+                                        break;
                                     }
                                     break;
                                 }
-                                break;
+                                slideIndex += 1;
                             }
-                            slideIndex += 1;
+                            isTrueZoom = sldIndexWithId.TryGetValue(sldIdZoomTo, out int index) && index == slideZoomTo;
                         }
-                        isTrueZoom = sldIndexWithId.TryGetValue(sldIdZoomTo, out int index) && index == slideZoomTo;
+                    }
+                    setStatus(isTrueZoom, isTrueZoom ? "True" : "False");
+                }
+                catch (Exception ex)
+                {
+                    setStatus(false, ex.Message);
+                }
+                finally
+                {
+                    if (System.IO.File.Exists(newPptxPath))
+                    {
+                        try
+                        {
+                            System.IO.File.Delete(newPptxPath);
+                        }
+                        catch (Exception)
+                        {
+
+
+                        }
+
                     }
                 }
-                setStatus(isTrueZoom, isTrueZoom ? "True" : "False");
             }
-            catch (Exception ex)
+            else
             {
-                setStatus(false, ex.Message);
+                setStatus("Lỗi copy file");
             }
 
+        }
+
+        string CloneFile(string filePath, string desDir)
+        {
+            if (!string.IsNullOrWhiteSpace(filePath) && System.IO.File.Exists(filePath))
+            {
+                if (!string.IsNullOrWhiteSpace(desDir))
+                {
+                    try
+                    {
+                        if (!Directory.Exists(desDir))
+                        {
+                            Directory.CreateDirectory(desDir);
+                        }
+                        string fileName = System.IO.Path.GetFileName(filePath);
+                        string newFileName = System.IO.Path.Combine(desDir, fileName);
+                        System.IO.File.Copy(fileName, newFileName);
+                        return newFileName;
+                    }
+                    catch (Exception)
+                    {
+
+                    }
+                }
+            }
+            return null;
         }
     }
 }
