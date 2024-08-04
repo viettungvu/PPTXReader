@@ -30,6 +30,7 @@
         {
             this.btnCheckInk = new System.Windows.Forms.Button();
             this.btnGetAnimate = new System.Windows.Forms.Button();
+            this.btnCheckZoom = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
             // btnCheckInk
@@ -52,11 +53,22 @@
             this.btnGetAnimate.UseVisualStyleBackColor = true;
             this.btnGetAnimate.Click += new System.EventHandler(this.btnGetAnimate_Click);
             // 
+            // btnCheckZoom
+            // 
+            this.btnCheckZoom.Location = new System.Drawing.Point(103, 243);
+            this.btnCheckZoom.Name = "btnCheckZoom";
+            this.btnCheckZoom.Size = new System.Drawing.Size(163, 52);
+            this.btnCheckZoom.TabIndex = 2;
+            this.btnCheckZoom.Text = "CheckZoom";
+            this.btnCheckZoom.UseVisualStyleBackColor = true;
+            this.btnCheckZoom.Click += new System.EventHandler(this.btnCheckZoom_Click);
+            // 
             // frmMain
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(800, 450);
+            this.Controls.Add(this.btnCheckZoom);
             this.Controls.Add(this.btnGetAnimate);
             this.Controls.Add(this.btnCheckInk);
             this.Name = "frmMain";
@@ -69,5 +81,6 @@
 
         private System.Windows.Forms.Button btnCheckInk;
         private System.Windows.Forms.Button btnGetAnimate;
+        private System.Windows.Forms.Button btnCheckZoom;
     }
 }

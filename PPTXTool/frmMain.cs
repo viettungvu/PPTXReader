@@ -10,6 +10,11 @@ using DocumentFormat.OpenXml.InkML;
 using DocumentFormat.OpenXml.Office2010.PowerPoint;
 using DocumentFormat.OpenXml.Presentation;
 using Transform2D = DocumentFormat.OpenXml.Drawing.Transform2D;
+using System.Collections.Generic;
+using System.Web;
+using PPTXTool.Extensions;
+using NonVisualGraphicFrameProperties = DocumentFormat.OpenXml.Presentation.NonVisualGraphicFrameProperties;
+using NonVisualDrawingProperties = DocumentFormat.OpenXml.Presentation.NonVisualDrawingProperties;
 
 namespace PPTXTool
 {
@@ -184,6 +189,62 @@ namespace PPTXTool
             //}
 
             return null;
+        }
+
+        private void btnCheckZoom_Click(object sender, EventArgs e)
+        {
+            string filePath = @"test3.pptx";
+            var output = checkZoom(filePath);
+        }
+
+        private List<KeyValuePair<string, string>> checkZoom(string filePath)
+        {
+            List<KeyValuePair<string, string>> output = new List<KeyValuePair<string, string>>();
+            using (PresentationDocument presentationDocument = PresentationDocument.Open(filePath, false))
+            {
+                PresentationPart presentationPart = presentationDocument.PresentationPart;
+                Dictionary<string, string> dic = new Dictionary<string, string>();
+                IEnumerable<Section> sections = presentationPart.Presentation.Descendants<Section>();
+                foreach (var section in sections)
+                {
+                    dic.Add(section.Attribute("id"), section.Attribute("name"));
+                }
+
+                const string URI = "http://schemas.microsoft.com/office/powerpoint/2016/sectionzoom";
+                foreach (var slidePart in presentationPart.SlideParts)
+                {
+                    Slide slide = slidePart.Slide;
+                    var graphicContainZoom = slide.Descendants<GraphicData>().Where(e =>
+                    {
+                        return string.Equals(e.Attribute("uri"), URI);
+                    });
+                    foreach (var graphic in graphicContainZoom)
+                    {
+                        var sectionZmObj = graphic.Descendants<OpenXmlUnknownElement>()
+                         .Where(e => e.LocalName.Equals("sectionZmObj")).FirstOrDefault();
+
+                        if (sectionZmObj != null)
+                        {
+                            string sectionId = sectionZmObj.Attribute("sectionId");
+                            if (dic.TryGetValue(sectionId, out string targetSection))
+                            {
+                                var nvGraphicFramePr = graphic.Parent.PreviousSibling<NonVisualGraphicFrameProperties>();
+                                if (nvGraphicFramePr != null)
+                                {
+                                    var cNvpr = nvGraphicFramePr.GetFirstChild<NonVisualDrawingProperties>();
+                                    string zoomSectionName = cNvpr.Attribute("name");
+                                    output.Add(new KeyValuePair<string, string>(zoomSectionName, targetSection));
+                                }
+                                else
+                                {
+                                    output.Add(new KeyValuePair<string, string>("", targetSection));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return output;
         }
     }
 }
