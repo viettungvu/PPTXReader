@@ -15,6 +15,7 @@ using System.Web;
 using PPTXTool.Extensions;
 using NonVisualGraphicFrameProperties = DocumentFormat.OpenXml.Presentation.NonVisualGraphicFrameProperties;
 using NonVisualDrawingProperties = DocumentFormat.OpenXml.Presentation.NonVisualDrawingProperties;
+using System.IO;
 
 namespace PPTXTool
 {
@@ -200,46 +201,99 @@ namespace PPTXTool
         private List<KeyValuePair<string, string>> checkZoom(string filePath)
         {
             List<KeyValuePair<string, string>> output = new List<KeyValuePair<string, string>>();
-            using (PresentationDocument presentationDocument = PresentationDocument.Open(filePath, false))
+            if (System.IO.File.Exists(filePath))
             {
-                PresentationPart presentationPart = presentationDocument.PresentationPart;
-                Dictionary<string, string> dic = new Dictionary<string, string>();
-                IEnumerable<Section> sections = presentationPart.Presentation.Descendants<Section>();
-                foreach (var section in sections)
+                ///Để tránh xung đột trong quá trình xử lý file thì cần copy file ra một thư mục khác và lý nghiệp vụ trên file đã copy, không xử lý trên file gốc
+                ///
+                string dir = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(filePath), "_tmp");
+                if (!Directory.Exists(dir))
                 {
-                    dic.Add(section.Attribute("id"), section.Attribute("name"));
+                    try
+                    {
+                        ///Tạo thư mục tmp nếu chưa có
+                        Directory.CreateDirectory(dir);
+                    }
+                    catch (Exception)
+                    {
+                        return output;
+                    }
                 }
-
-                const string URI = "http://schemas.microsoft.com/office/powerpoint/2016/sectionzoom";
-                foreach (var slidePart in presentationPart.SlideParts)
+                string desFile = System.IO.Path.Combine(dir, System.IO.Path.GetFileName(filePath));
+                try
                 {
-                    Slide slide = slidePart.Slide;
-                    var graphicContainZoom = slide.Descendants<GraphicData>().Where(e =>
-                    {
-                        return string.Equals(e.Attribute("uri"), URI);
-                    });
-                    foreach (var graphic in graphicContainZoom)
-                    {
-                        var sectionZmObj = graphic.Descendants<OpenXmlUnknownElement>()
-                         .Where(e => e.LocalName.Equals("sectionZmObj")).FirstOrDefault();
+                    ///Copy file sang thư mục _temp
+                    System.IO.File.Copy(filePath, desFile);
 
-                        if (sectionZmObj != null)
+                    using (PresentationDocument presentationDocument = PresentationDocument.Open(desFile, false))
+                    {
+                        PresentationPart presentationPart = presentationDocument.PresentationPart;
+                        Dictionary<string, string> dic = new Dictionary<string, string>();
+                        IEnumerable<Section> sections = presentationPart.Presentation.Descendants<Section>();
+                        foreach (var section in sections)
                         {
-                            string sectionId = sectionZmObj.Attribute("sectionId");
-                            if (dic.TryGetValue(sectionId, out string targetSection))
+                            dic.Add(section.Attribute("id"), section.Attribute("name"));
+                        }
+
+                        const string URI = "http://schemas.microsoft.com/office/powerpoint/2016/sectionzoom";
+                        foreach (var slidePart in presentationPart.SlideParts)
+                        {
+                            try
                             {
-                                var nvGraphicFramePr = graphic.Parent.PreviousSibling<NonVisualGraphicFrameProperties>();
-                                if (nvGraphicFramePr != null)
+                                Slide slide = slidePart.Slide;
+                                var graphicContainZoom = slide.Descendants<GraphicData>().Where(e =>
                                 {
-                                    var cNvpr = nvGraphicFramePr.GetFirstChild<NonVisualDrawingProperties>();
-                                    string zoomSectionName = cNvpr.Attribute("name");
-                                    output.Add(new KeyValuePair<string, string>(zoomSectionName, targetSection));
-                                }
-                                else
+                                    return string.Equals(e.Attribute("uri"), URI);
+                                });
+                                foreach (var graphic in graphicContainZoom)
                                 {
-                                    output.Add(new KeyValuePair<string, string>("", targetSection));
+                                    var sectionZmObj = graphic.Descendants<OpenXmlUnknownElement>()
+                                     .Where(e => e.LocalName.Equals("sectionZmObj")).FirstOrDefault();
+
+                                    if (sectionZmObj != null)
+                                    {
+                                        string sectionId = sectionZmObj.Attribute("sectionId");
+                                        if (dic.TryGetValue(sectionId, out string targetSection))
+                                        {
+                                            var nvGraphicFramePr = graphic.Parent.PreviousSibling<NonVisualGraphicFrameProperties>();
+                                            if (nvGraphicFramePr != null)
+                                            {
+                                                var cNvpr = nvGraphicFramePr.GetFirstChild<NonVisualDrawingProperties>();
+                                                string zoomSectionName = cNvpr.Attribute("name");
+                                                output.Add(new KeyValuePair<string, string>(zoomSectionName, targetSection));
+                                            }
+                                            else
+                                            {
+                                                output.Add(new KeyValuePair<string, string>("", targetSection));
+                                            }
+                                        }
+                                    }
                                 }
                             }
+                            catch (Exception)
+                            {
+
+                            }
+
+                        }
+                    }
+
+                }
+                catch (Exception)
+                {
+
+                }
+                finally
+                {
+                    ///Sau khi làm xong thì xóa file đã copy đi
+                    if (File.Exists(desFile))
+                    {
+                        try
+                        {
+                            System.IO.File.Delete(desFile);
+                        }
+                        catch (Exception)
+                        {
+
                         }
                     }
                 }
